@@ -98,22 +98,22 @@ namespace EncryptionSteganography
 
             var selectedProcessItem = ProcessType.SelectedItem as ComboBoxItem;
             var selectedProcess = selectedProcessItem?.Content.ToString();
-            
+
 
             if (selectedProcess == "Inclusion Message")
             {
                 var encrypted = Encryptions.EncryptMessage(MessageTextBox.Text, passwordBox.Password, selectedEncryption);
-                var sad = MessageTextBox.Text ;
-                
+                var sad = MessageTextBox.Text;
+
                 byte[] sadd = System.Text.Encoding.UTF8.GetBytes(sad);
                 sad.ToArray();
-                
-                BitArray messageBits = new BitArray(sadd);
-                
 
-               
-                
-                
+                BitArray messageBits = new BitArray(encrypted);
+
+
+
+
+
 
                 // Получаваме WriteableBitmap от изображението в Image контролата
                 WriteableBitmap writeableBitmap = new WriteableBitmap((BitmapSource)displayedImage.Source);
@@ -127,10 +127,11 @@ namespace EncryptionSteganography
             else if (selectedProcess == "Extraction Message")
             {
                 WriteableBitmap writeableBitmap = new WriteableBitmap((BitmapSource)displayedImage.Source);
-                var decrypted = ExtractMessageFromImage(writeableBitmap);
+                var decrypted = ConvertBitArrayToString(ExtractMessageFromImage(writeableBitmap));
+                string ClearText = Encryptions.DecryptMessage(decrypted, passwordBox.Password, selectedEncryption);
 
-                MessageBox.Show(ConvertBitArrayToString(decrypted));
-               
+                MessageBox.Show(ClearText);
+
             }
         }
 
@@ -264,7 +265,7 @@ namespace EncryptionSteganography
 
 
 
-        private string ConvertBitArrayToString(BitArray bits)
+        private Byte[] ConvertBitArrayToString(BitArray bits)
         {
             // Calculate the number of bytes needed to store the bits
             int numBytes = bits.Length / 8;
@@ -275,7 +276,7 @@ namespace EncryptionSteganography
             bits.CopyTo(bytes, 0);
 
             // Convert the bytes array to a string using UTF8 encoding
-            return Encoding.UTF8.GetString(bytes);
+            return bytes;
         }
 
 
