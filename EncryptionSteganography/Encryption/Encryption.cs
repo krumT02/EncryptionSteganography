@@ -11,7 +11,7 @@ namespace EncryptionSteganography.Encryption
 {
     public class Encryptions
     {
-        public static byte[] EncryptMessage(string plainText, string password, string algorithm)
+        public static byte[] EncryptAES(string plainText, string password)
         {
             // Проверка на алгоритъма и задаване на подходящия криптографски провайдър
             using (Aes aesAlg = Aes.Create())
@@ -38,29 +38,112 @@ namespace EncryptionSteganography.Encryption
                 }
             }
         }
-        public static string DecryptMessage(byte[] cipherText, string password, string algorithm)
+        public static string DecryptAES(byte[] cipherText, string password)
         {
-            // Проверка на алгоритъма и задаване на подходящия криптографски провайдър
-            using (Aes aesAlg = Aes.Create())
+            try
             {
-                // Подготовка на ключ и IV
-                var key = new Rfc2898DeriveBytes(password, new byte[] { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80 }, 10000);
-                aesAlg.Key = key.GetBytes(aesAlg.KeySize / 8);
-                aesAlg.IV = key.GetBytes(aesAlg.BlockSize / 8);
-
-                // Декриптиране
-                var decryptor = aesAlg.CreateDecryptor(aesAlg.Key, aesAlg.IV);
-                using (var msDecrypt = new MemoryStream(cipherText))
+                // Проверка на алгоритъма и задаване на подходящия криптографски провайдър
+                using (Aes aesAlg = Aes.Create())
                 {
-                    using (var csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read))
+                    // Подготовка на ключ и IV
+                    var key = new Rfc2898DeriveBytes(password, new byte[] { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80 }, 10000);
+                    aesAlg.Key = key.GetBytes(aesAlg.KeySize / 8);
+                    aesAlg.IV = key.GetBytes(aesAlg.BlockSize / 8);
+
+                    // Декриптиране
+                    var decryptor = aesAlg.CreateDecryptor(aesAlg.Key, aesAlg.IV);
+                    using (var msDecrypt = new MemoryStream(cipherText))
                     {
-                        using (var srDecrypt = new StreamReader(csDecrypt))
+                        using (var csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read))
                         {
-                            return srDecrypt.ReadToEnd();
+                            using (var srDecrypt = new StreamReader(csDecrypt))
+                            {
+                                return srDecrypt.ReadToEnd();
+                            }
                         }
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                return " Wrong Password or Wrong encryption method choosen";
+            }
+        }
+        public static byte[] EncryptTDES(string TextToEncrypt,string mysecurityKey)
+
+
+        {
+            byte[] MyEncryptedArray = UTF8Encoding.UTF8
+               .GetBytes(TextToEncrypt);
+
+            MD5CryptoServiceProvider MyMD5CryptoService = new
+               MD5CryptoServiceProvider();
+
+            byte[] MysecurityKeyArray = MyMD5CryptoService.ComputeHash
+               (UTF8Encoding.UTF8.GetBytes(mysecurityKey));
+
+            MyMD5CryptoService.Clear();
+
+            var MyTripleDESCryptoService = new
+               TripleDESCryptoServiceProvider();
+
+            MyTripleDESCryptoService.Key = MysecurityKeyArray;
+
+            MyTripleDESCryptoService.Mode = CipherMode.ECB;
+
+            MyTripleDESCryptoService.Padding = PaddingMode.PKCS7;
+
+            var MyCrytpoTransform = MyTripleDESCryptoService
+               .CreateEncryptor();
+
+            byte[] MyresultArray = MyCrytpoTransform
+               .TransformFinalBlock(MyEncryptedArray, 0,
+               MyEncryptedArray.Length);
+
+            MyTripleDESCryptoService.Clear();
+
+            return MyresultArray;
+        }
+        public static string DecryptTDES(byte[] MyDecryptArray, string mysecurityKey)
+        {
+            try
+            {
+
+                MD5CryptoServiceProvider MyMD5CryptoService = new
+                   MD5CryptoServiceProvider();
+
+                byte[] MysecurityKeyArray = MyMD5CryptoService.ComputeHash
+                   (UTF8Encoding.UTF8.GetBytes(mysecurityKey));
+
+                MyMD5CryptoService.Clear();
+
+                var MyTripleDESCryptoService = new
+                   TripleDESCryptoServiceProvider();
+
+                MyTripleDESCryptoService.Key = MysecurityKeyArray;
+
+                MyTripleDESCryptoService.Mode = CipherMode.ECB;
+
+                MyTripleDESCryptoService.Padding = PaddingMode.PKCS7;
+
+                var MyCrytpoTransform = MyTripleDESCryptoService
+                   .CreateDecryptor();
+
+                byte[] MyresultArray = MyCrytpoTransform
+                   .TransformFinalBlock(MyDecryptArray, 0,
+                   MyDecryptArray.Length);
+
+                MyTripleDESCryptoService.Clear();
+
+                return UTF8Encoding.UTF8.GetString(MyresultArray);
+            }
+            catch (Exception ex)
+            {
+                return "Wrong Password or Wrong encryption method choosen";
+                
+                
+            }
         }
     }
 }
+ 

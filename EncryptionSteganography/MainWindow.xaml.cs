@@ -102,35 +102,51 @@ namespace EncryptionSteganography
 
             if (selectedProcess == "Inclusion Message")
             {
-                var encrypted = Encryptions.EncryptMessage(MessageTextBox.Text, passwordBox.Password, selectedEncryption);
-                var sad = MessageTextBox.Text;
+                if (selectedEncryption == "AES")
+                {
+                    var encrypted = Encryptions.EncryptAES(MessageTextBox.Text, passwordBox.Password);
+                    BitArray messageBits = new BitArray(encrypted);
 
-                byte[] sadd = System.Text.Encoding.UTF8.GetBytes(sad);
-                sad.ToArray();
+                    // Получаваме WriteableBitmap от изображението в Image контролата
+                    WriteableBitmap writeableBitmap = new WriteableBitmap((BitmapSource)displayedImage.Source);
 
-                BitArray messageBits = new BitArray(encrypted);
+                    // Вграждаме съобщението в изображението
+                    SteganographyHelper.EmbedMessageInImage(writeableBitmap, messageBits);
 
+                    // Запазваме изображението
+                    SaveImage(writeableBitmap);
+                }
+                else if(selectedEncryption == "TDES") {
+                    var encrypted = Encryptions.EncryptTDES(MessageTextBox.Text, passwordBox.Password);
+                    BitArray messageBits = new BitArray(encrypted);
 
+                    // Получаваме WriteableBitmap от изображението в Image контролата
+                    WriteableBitmap writeableBitmap = new WriteableBitmap((BitmapSource)displayedImage.Source);
 
+                    // Вграждаме съобщението в изображението
+                    SteganographyHelper.EmbedMessageInImage(writeableBitmap, messageBits);
 
-
-
-                // Получаваме WriteableBitmap от изображението в Image контролата
-                WriteableBitmap writeableBitmap = new WriteableBitmap((BitmapSource)displayedImage.Source);
-
-                // Вграждаме съобщението в изображението
-                EmbedMessageInImage(writeableBitmap, messageBits);
-
-                // Запазваме изображението
-                SaveImage(writeableBitmap);
+                    // Запазваме изображението
+                    SaveImage(writeableBitmap);
+                }
             }
             else if (selectedProcess == "Extraction Message")
             {
                 WriteableBitmap writeableBitmap = new WriteableBitmap((BitmapSource)displayedImage.Source);
-                var decrypted = ConvertBitArrayToString(ExtractMessageFromImage(writeableBitmap));
-                string ClearText = Encryptions.DecryptMessage(decrypted, passwordBox.Password, selectedEncryption);
+                var decrypted = ConvertBitArrayToString(SteganographyHelper.ExtractMessageFromImage(writeableBitmap));
+                if (selectedEncryption == "AES")
+                {
+                    string ClearText = Encryptions.DecryptAES(decrypted, passwordBox.Password);
 
-                MessageBox.Show(ClearText);
+                    MessageBox.Show(ClearText);
+                }
+                if (selectedEncryption == "TDES")
+                {
+
+                    string ClearText = Encryptions.DecryptTDES(decrypted, passwordBox.Password);
+
+                    MessageBox.Show(ClearText);
+                }
 
             }
         }
@@ -243,25 +259,8 @@ namespace EncryptionSteganography
         }
 
 
-        // Извиква се когато искаме да извлечем съобщението
-        private int GetMessageLengthFromImage(WriteableBitmap image)
-        {
-            int length = 0;
-            int stride = image.PixelWidth * (image.Format.BitsPerPixel / 8);
-            byte[] pixels = new byte[4 * stride]; // Прочитаме достатъчно пиксели за извличане на 32-битовата дължина
-            image.CopyPixels(new Int32Rect(0, 0, image.PixelWidth, 1), pixels, stride, 0);
-
-            // Използваме първите 32 бита (32 байта ако се взима по 1 бит от всяко RGB)
-            for (int i = 0; i < 32; i++)
-            {
-                if ((pixels[i / 8 * 4] & (1 << (i % 8))) != 0) // Четем i-тия бит от синия канал
-                {
-                    length |= (1 << i);
-                }
-            }
-
-            return length;
-        }
+        
+       
 
 
 
@@ -279,7 +278,19 @@ namespace EncryptionSteganography
             return bytes;
         }
 
+        private void Button_Click_1(object sender, RoutedEventArgs e)
+        {
+            MessageTextBox.Clear();
+            passwordBox.Clear();
+            
+            visiblePasswordTextBox.Clear();
 
+        }
 
+        private void Button_Click_2(object sender, RoutedEventArgs e)
+        {
+            AboutWindow aboutWindow = new AboutWindow();
+            aboutWindow.ShowDialog(); // Показва AboutWindow като модален диалог
+        }
     }
 }

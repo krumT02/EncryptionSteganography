@@ -1,130 +1,133 @@
-﻿using System.Collections;
+﻿using Microsoft.Win32;
+using System;
+using System.Collections;
+using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Media.Imaging;
 
 class SteganographyHelper
 {
-    public enum State
+
+
+    public static void EmbedMessageInImage(WriteableBitmap image, BitArray messageBits)
     {
-        Hiding,
-        Filling_With_Zeros
-    };
+        int index = 0; // Индекс за текущия бит от съобщението
+        int stride = image.PixelWidth * 4; // 4 bytes per pixel for BGRA32 format
+        byte[] pixels = new byte[image.PixelHeight * stride];
+        image.CopyPixels(pixels, stride, 0);
 
-    public static WriteableBitmap EmbedText(string text, WriteableBitmap writeableBmp)
-    {
-        // Конвертираме текста в масив от битове
-        BitArray textBits = new BitArray(Encoding.UTF8.GetBytes(text));
-
-        int index = 0;
-        int stride = writeableBmp.PixelWidth * (writeableBmp.Format.BitsPerPixel / 8); // Пресмятаме stride на изображението
-        byte[] pixels = new byte[writeableBmp.PixelHeight * stride];
-        writeableBmp.CopyPixels(pixels, stride, 0);
-
-        for (int i = 0; i < textBits.Length; i++)
+        // Convert the message length to bits and store it in the first 16 pixels
+        int messageLength = messageBits.Length;
+        BitArray lengthBits = new BitArray(BitConverter.GetBytes(messageLength));
+        for (int i = 0; i < 16; i++)
         {
-            // Получаваме текущия бит от textBits
-            bool bit = textBits[i];
+            int byteIndex = i * 4; // Конвертираме индекса на пиксела в индекса на байта
+            pixels[byteIndex] = SetLSB(pixels[byteIndex], lengthBits[i]);
+        }
 
-            // Запазваме бита в последния бит на съответния цветов компонент
-            // Алтернативно, може да изберете да запишете само в един от цветовете, например само в синия (B)
-            if (i % 3 == 0)
+        // Embed the actual message after the metadata about its length
+        index = 64; // Skip the first 64 bytes (16 pixels * 4 bytes per pixel)
+        for (int bitIndex = 0; bitIndex < messageBits.Length; bitIndex++)
+        {
+            if (index < pixels.Length)
             {
-                // Записваме в синия канал
-                pixels[index] = SetLSB(pixels[index], bit);
+                pixels[index] = SetLSB(pixels[index], messageBits[bitIndex]);
+                index += 4; // Move to the next pixel's blue component
             }
-            else if (i % 3 == 1)
+            else
             {
-                // Записваме в зеления канал
-                pixels[index + 1] = SetLSB(pixels[index + 1], bit);
-            }
-            else if (i % 3 == 2)
-            {
-                // Записваме в червения канал
-                pixels[index + 2] = SetLSB(pixels[index + 2], bit);
-                index += 4; // Минаваме към следващия пиксел след всеки трети бит
-            }
-
-            // Уверете се, че не излизаме извън границите на масива
-            if (index >= pixels.Length - 3)
-            {
+                // Optional: Handle the case where the image is too small to hold the message
                 break;
             }
         }
 
-        // Записваме променените пиксели обратно в writeableBmp
-        writeableBmp.WritePixels(new Int32Rect(0, 0, writeableBmp.PixelWidth, writeableBmp.PixelHeight), pixels, stride, 0);
-
-        return writeableBmp;
+        // Write the modified pixels back to the WriteableBitmap
+        image.WritePixels(new Int32Rect(0, 0, image.PixelWidth, image.PixelHeight), pixels, stride, 0);
     }
-
-    private static byte SetLSB(byte byteValue, bool bit)
+    public static byte SetLSB(byte originalByte, bool bitValue)
     {
-        // Задаваме най-малко значимия бит (LSB) на byteValue според стойността на bit
-        return bit ? (byte)(byteValue | 1) : (byte)(byteValue & ~1);
+        // Clear the LSB of the original byte
+        byte clearedLSB = (byte)(originalByte & 0xFE); // 0xFE = 1111 1110
+                                                       // Set the LSB to the bitValue
+        byte newByte = (byte)(clearedLSB | (bitValue ? 1 : 0));
+        return newByte;
     }
-
-
-    public static string ExtractText(WriteableBitmap bmp)
+    public static void SaveImage(WriteableBitmap image)
     {
-        int colorUnitIndex = 0;
-        int bitIndex = 0;
-        byte[] bytes = new byte[bmp.PixelWidth * bmp.PixelHeight];
-        int stride = bmp.PixelWidth * (bmp.Format.BitsPerPixel / 8);
-        byte[] pixels = new byte[bmp.PixelHeight * stride];
-        bmp.CopyPixels(pixels, stride, 0);
-        BitArray bits = new BitArray(bmp.PixelWidth * bmp.PixelHeight * 3);
-
-        for (int i = 0; i < pixels.Length; i += 4)
+        SaveFileDialog saveFileDialog = new SaveFileDialog();
+        saveFileDialog.Filter = "PNG Image|*.png";
+        if (saveFileDialog.ShowDialog() == true)
         {
-            for (int n = 0; n < 3; n++)
+            using (FileStream stream = new FileStream(saveFileDialog.FileName, FileMode.Create))
             {
-                int shift = (i % 4) * 8;
-                bool bit = (pixels[i + n] & 1) == 1;
-                bits.Set(bitIndex, bit);
-                bitIndex++;
+                PngBitmapEncoder encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(image));
+                encoder.Save(stream);
             }
         }
 
-        for (int i = 0; i < bits.Length; i += 8)
-        {
-            if (i + 8 > bits.Length) break;
-
-            byte b = ConvertToByte(bits, i);
-            if (b == 0) break;
-
-            bytes[colorUnitIndex] = b;
-            colorUnitIndex++;
-        }
-
-        return Encoding.UTF8.GetString(bytes, 0, colorUnitIndex);
     }
-
-    private static byte ConvertToByte(BitArray bits, int startIndex)
+    public static BitArray ExtractMessageFromImage(WriteableBitmap image)
     {
-        byte b = 0;
-        for (int i = 0; i < 8; i++)
+        int stride = image.PixelWidth * 4; // 4 bytes per pixel for BGRA32 format
+        byte[] pixels = new byte[image.PixelHeight * stride];
+        image.CopyPixels(pixels, stride, 0);
+
+        // Extract the length of the message from the first 16 pixels
+        byte[] lengthBytes = new byte[4];
+        BitArray lengthBits = new BitArray(16);
+        for (int i = 0; i < 16; i++)
         {
-            if (bits[startIndex + i])
+            int byteIndex = i * 4; // Convert pixel index to byte index
+            lengthBits[i] = GetLSB(pixels[byteIndex]);
+        }
+        lengthBits.CopyTo(lengthBytes, 0);
+        int messageLength = BitConverter.ToInt32(lengthBytes, 0);
+
+        // Prepare to extract the actual message
+        BitArray messageBits = new BitArray(messageLength);
+        int index = 64; // Skip the first 64 bytes (16 pixels * 4 bytes per pixel)
+        for (int bitIndex = 0; bitIndex < messageLength; bitIndex++)
+        {
+            if (index < pixels.Length)
             {
-                b |= (byte)(1 << (7 - i));
+                messageBits[bitIndex] = GetLSB(pixels[index]);
+                index += 4; // Move to the next pixel's blue component
+            }
+            else
+            {
+                // Optional: Handle the case where the image does not contain the expected amount of data
+                break;
             }
         }
-        return b;
+
+        return messageBits;
+    }
+
+    // Helper method to get the least significant bit of a byte
+    public static bool GetLSB(byte b)
+    {
+        return (b & 1) == 1;
     }
 
 
-    public static int reverseBits(int n)
+
+
+
+
+
+    public static Byte[] ConvertBitArrayToString(BitArray bits)
     {
-        int result = 0;
+        // Calculate the number of bytes needed to store the bits
+        int numBytes = bits.Length / 8;
+        if (bits.Length % 8 != 0) numBytes++; // Add an extra byte for remaining bits
 
-        for (int i = 0; i < 8; i++)
-        {
-            result = result * 2 + n % 2;
+        // Convert the BitArray to an array of bytes
+        byte[] bytes = new byte[numBytes];
+        bits.CopyTo(bytes, 0);
 
-            n /= 2;
-        }
-
-        return result;
+        // Convert the bytes array to a string using UTF8 encoding
+        return bytes;
     }
 }
